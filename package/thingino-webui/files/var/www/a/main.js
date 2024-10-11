@@ -59,6 +59,42 @@ function sendToApi(endpoint) {
 	xhr.send();
 }
 
+class WS {
+	constructor(token, payload, onmessage) {
+		this.token = token;
+		this.payload = payload;
+		this.onmessage = onmessage;
+		this.init();
+	}
+
+	init() {
+		this.socket = new WebSocket('ws://' + document.location.hostname + ':8089?token=' + this.token);
+		this.socket.addEventListener("close", () => {
+			console.log("WebSocket connection closed");
+		});
+		this.socket.addEventListener("error", (error) => {
+			console.error('WebSocket error', err);
+			this.init();
+		});
+		this.socket.addEventListener("open", () => {
+			console.log('WebSocket connection opened');
+			this.send(this.payload);
+		});
+		this.socket.addEventListener("message", ({ data }) => {
+			if (data == '') return;
+			const msg = JSON.parse(data);
+			console.log(ts(), '<===', data);
+			this.onmessage(msg);
+		});
+	}
+
+	send(payload) {
+		const data = JSON.stringify(payload);
+		console.log(ts(), '===>', data);
+		this.socket.send(data);
+	}
+}
+
 function reqListener(data) {
 	console.log(data.responseText);
 }

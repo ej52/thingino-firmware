@@ -98,92 +98,43 @@ for i in 0 1; do
 </div>
 
 <script>
-// stream0, stream1
-const stream_params = ['audio_enabled', 'bitrate', 'buffers', 'enabled', 'format', 'fps', 'gop', 'height', 'max_gop', 'mode',
-	'profile', 'rotation', 'rtsp_endpoint', 'width'];
+const stream_params = ['audio_enabled', 'bitrate', 'buffers', 'enabled', 'format', 'fps', 'gop', 'height', 'max_gop', 'mode', 'profile', 'rotation', 'rtsp_endpoint', 'width'];
+const audio_params = ['input_agc_compression_gain_db', 'input_agc_enabled', 'input_agc_target_level_dbfs', 'input_alc_gain', 'input_bitrate', 'input_enabled', 'input_format', 'input_gain', 'input_high_pass_filter', 'input_noise_suppression', 'input_sample_rate', 'input_vol'];
+const domains = Object.entries({'stream0': stream_params, 'stream1': stream_params, 'audio': audio_params});
 
-// audio
-const audio_params = ['input_agc_compression_gain_db', 'input_agc_enabled', 'input_agc_target_level_dbfs',
-	'input_alc_gain', 'input_bitrate', 'input_enabled', 'input_format', 'input_gain', 'input_high_pass_filter',
-	'input_noise_suppression', 'input_sample_rate', 'input_vol'];
-
-let ws = new WebSocket('ws://' + document.location.hostname + ':8089?token=<%= $ws_token %>');
-ws.onopen = () => {
-	console.log('WebSocket connection opened');
-	const stream_rq = '{' + stream_params.map((x) => `"${x}":null`).join() + '}';
-	const payload = '{"stream0":' + stream_rq + ',"stream1":' + stream_rq + ',"audio":{' + audio_params.map((x) => `"${x}":null`).join() + '}}';
-	console.log('===>', payload);
-	ws.send(payload);
-}
-ws.onclose = () => { console.log('WebSocket connection closed'); }
-ws.onerror = (err) => { console.error('WebSocket error', err); }
-ws.onmessage = (ev) => {
-	if (ev.data == '') return;
-	const msg = JSON.parse(ev.data);
-	console.log(ts(), '<===', ev.data);
-
-	// Video
-	for (const i in [0, 1]) {
-    const domain = `stream${i}`;
-		const data = msg[domain];
-		if (data) {
-			stream_params.forEach((x) => {
-				if (typeof(data[x]) !== 'undefined') setValue(data, domain, x);
-			});
-		}
+const ws = new WS(
+	'<%= $ws_token %>',
+	domains.reduce((a, [d, params]) => ({ ...a, [d]: params.reduce((a, p) => ({ ...a, [p]: null}), {})}), {}),
+	(msg) => {
+		domains.forEach(([d, params]) => {
+			const data = msg[d];
+			if (data) {
+				params.forEach(p => {
+					if (typeof(data[p]) !== 'undefined') setValue(data, d, p);
+				});
+			}
+		});
 	}
-	// Audio
-	{
-		const data = msg.audio;
-		if (data) {
-			audio_params.forEach((x) => {
-				if (typeof(data[x]) !== 'undefined') setValue(data, 'audio', x);
-			});
-		}
-	}
-}
+);
 
-function sendToWs(payload) {
-	console.log(ts(), '===>', payload);
-	ws.send(payload);
-}
-
-function saveValue(domain, name) {
-	const el = $(`#${domain}_${name}`);
-	if (!el) {
-		console.error(`Element #${domain}_${name} not found`);
-		return;
-	}
-	let value;
+function saveValue(el, domain, name) {
+	let value = Number.isFinite(+el.value) ? Number(el.value) : el.value;
 	if (el.type == "checkbox") {
-		value = el.checked;
-	} else {
-		value = el.value;
-		if (name == "height" || name == "width") {
-			value = value &~ 15;
-		} else if (["format", "input_format", "mode", "rtsp_endpoint"].includes(name)) {
-			value = `"${value}"`;
-		}
+		value = el.checked
+	} else if (["height",  "width"].indexOf(name) !== -1) {
+		value = value &~ 15;
 	}
 
-	let thread;
-	if (domain == 'stream0' || domain == 'stream1') {
-		thread = ThreadRtsp + ThreadVideo; //
-	} else if (domain == 'audio') {
-		thread = ThreadAudio;
-	}
-
-	sendToWs(`{"${domain}":{"${name}":${value}},"action":{"save_config":null,"restart_thread":${thread}}}`);
-}
-
-for (const i in [0, 1]) {
-	stream_params.forEach((x) => {
-		$(`#stream${i}_${x}`).onchange = (_) => saveValue(`stream${i}`, x);
+	ws.send({
+		[domain]: {[name]: value},
+		action: {save_config: null, restart_thread: domain == 'audio' ? ThreadAudio : ThreadRtsp + ThreadVideo}
 	});
 }
-audio_params.forEach((x) => {
-	$(`#audio_${x}`).onchange = (_) => saveValue('audio', x);
+
+domains.forEach(([d, params]) => {
+	params.forEach(p => $(`#${d}_${p}`).onchange = ({ target }) => saveValue(target, d, p));
 });
+
 </script>
 
 <%in _footer.cgi %>
