@@ -100,22 +100,19 @@ for i in 0 1; do
 <script>
 const stream_params = ['audio_enabled', 'bitrate', 'buffers', 'enabled', 'format', 'fps', 'gop', 'height', 'max_gop', 'mode', 'profile', 'rotation', 'rtsp_endpoint', 'width'];
 const audio_params = ['input_agc_compression_gain_db', 'input_agc_enabled', 'input_agc_target_level_dbfs', 'input_alc_gain', 'input_bitrate', 'input_enabled', 'input_format', 'input_gain', 'input_high_pass_filter', 'input_noise_suppression', 'input_sample_rate', 'input_vol'];
-const domains = Object.entries({'stream0': stream_params, 'stream1': stream_params, 'audio': audio_params});
+const domains = [['stream0', stream_params], ['stream1', stream_params], ['audio', audio_params]];
+const payload = domains.reduce((a, [d, params]) => ({ ...a, [d]: params.reduce((a, p) => ({ ...a, [p]: null}), {})}), {});
 
-const ws = new WS(
-	'<%= $ws_token %>',
-	domains.reduce((a, [d, params]) => ({ ...a, [d]: params.reduce((a, p) => ({ ...a, [p]: null}), {})}), {}),
-	(msg) => {
-		domains.forEach(([d, params]) => {
-			const data = msg[d];
-			if (data) {
-				params.forEach(p => {
-					if (typeof(data[p]) !== 'undefined') setValue(data, d, p);
-				});
-			}
-		});
-	}
-);
+const ws = new WS( '<%= $ws_token %>', payload, (msg) => {
+	domains.forEach(([d, params]) => {
+		const data = msg[d];
+		if (data) {
+			params.forEach(p => {
+				if (typeof(data[p]) !== 'undefined') setValue(data, d, p);
+			});
+		}
+	});
+});
 
 function saveValue(el, domain, name) {
 	let value = Number.isFinite(+el.value) ? Number(el.value) : el.value;
